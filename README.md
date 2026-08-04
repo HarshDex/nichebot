@@ -18,13 +18,13 @@ Adding more sources does not improve signal, it just adds noise and ban risk.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests anthropic playwright
+pip install requests playwright
 playwright install chromium
 
 export REDDIT_CLIENT_ID=...        # reddit.com/prefs/apps -> type "script"
 export REDDIT_CLIENT_SECRET=...
 export REDDIT_USER_AGENT="nichebot/0.1 by u/yourhandle"
-export ANTHROPIC_API_KEY=...
+export GROQ_API_KEY=...            # free key: console.groq.com
 ```
 
 ## Run

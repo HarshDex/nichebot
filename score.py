@@ -1,15 +1,16 @@
 """
 Scoring layer — THIS is where raw noise becomes a decision.
-Uses the Anthropic API to turn each complaint into structured fields,
-then clusters by problem and ranks.
+Uses the Groq API (free tier, OpenAI-compatible) to turn each complaint
+into structured fields, then clusters by problem and ranks.
 
-env: ANTHROPIC_API_KEY
-pip install anthropic
+env: GROQ_API_KEY   (free key: console.groq.com)
+pip install requests
 """
-import os, json, sys, time
+import os, json, sys, time, requests
 import db
 
-MODEL = os.getenv("NICHEBOT_MODEL", "claude-sonnet-4-6")
+MODEL = os.getenv("NICHEBOT_MODEL", "llama-3.3-70b-versatile")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 BATCH = 12
 
 SYSTEM = """You classify user complaints into micro-SaaS opportunity signals.
@@ -33,10 +34,10 @@ Return ONLY a JSON array. No prose, no markdown fences."""
 
 
 def client():
-    from anthropic import Anthropic
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        sys.exit("Set ANTHROPIC_API_KEY")
-    return Anthropic()
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        sys.exit("Set GROQ_API_KEY (free key: console.groq.com)")
+    return key
 
 
 def classify(cl, rows):
@@ -44,11 +45,22 @@ def classify(cl, rows):
         f"[{i}] source={r['source']} ctx={r['subsource']}\n{r['text'][:1500]}"
         for i, r in enumerate(rows)
     )
-    msg = cl.messages.create(
-        model=MODEL, max_tokens=4000, system=SYSTEM,
-        messages=[{"role": "user", "content": items}],
+    r = requests.post(
+        GROQ_URL,
+        headers={"Authorization": f"Bearer {cl}", "Content-Type": "application/json"},
+        json={
+            "model": MODEL,
+            "max_tokens": 4000,
+            "temperature": 0,
+            "messages": [
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": items},
+            ],
+        },
+        timeout=60,
     )
-    raw = "".join(b.text for b in msg.content if b.type == "text")
+    r.raise_for_status()
+    raw = r.json()["choices"][0]["message"]["content"]
     raw = raw.replace("```json", "").replace("```", "").strip()
     try:
         return json.loads(raw)
