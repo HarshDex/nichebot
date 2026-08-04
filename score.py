@@ -3,7 +3,8 @@ Scoring layer — THIS is where raw noise becomes a decision.
 Uses the Groq API (free tier, OpenAI-compatible) to turn each complaint
 into structured fields, then clusters by problem and ranks.
 
-env: GROQ_API_KEY   (free key: console.groq.com)
+env: GROQ_API_KEYS  comma-separated list of free keys (console.groq.com)
+     falls back to GROQ_API_KEY for a single key
 pip install requests
 """
 import os, json, sys, time, requests
@@ -35,10 +36,13 @@ Return ONLY a JSON array. No prose, no markdown fences."""
 
 
 def client():
-    key = os.getenv("GROQ_API_KEY")
-    if not key:
-        sys.exit("Set GROQ_API_KEY (free key: console.groq.com)")
-    return key
+    keys = [k.strip() for k in os.getenv("GROQ_API_KEYS", "").split(",") if k.strip()]
+    if not keys:
+        single = os.getenv("GROQ_API_KEY")
+        keys = [single] if single else []
+    if not keys:
+        sys.exit("Set GROQ_API_KEYS (comma-separated) or GROQ_API_KEY (free: console.groq.com)")
+    return keys
 
 
 def classify(cl, rows):
@@ -76,19 +80,26 @@ def classify(cl, rows):
 
 def run():
     db.init()
-    cl = client()
+    keys = client()
+    key_idx = 0
     total = 0
     while True:
         rows = db.unscored(BATCH)
         if not rows:
             break
         try:
-            out = classify(cl, rows)
+            out = classify(keys[key_idx], rows)
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 429:
-                wait = int(e.response.headers.get("retry-after", 20))
-                print(f"[score] rate limited, waiting {wait}s", flush=True)
-                time.sleep(wait)
+                key_idx += 1
+                if key_idx < len(keys):
+                    print(f"[score] key {key_idx} rate limited, switching to key {key_idx + 1}/{len(keys)}", flush=True)
+                else:
+                    # every key hit its limit this round — wait, then start over
+                    wait = int(e.response.headers.get("retry-after", 20))
+                    print(f"[score] all {len(keys)} keys rate limited, waiting {wait}s", flush=True)
+                    time.sleep(wait)
+                    key_idx = 0
             else:
                 print(f"[score] batch failed: {e}", flush=True)
                 time.sleep(5)
@@ -100,7 +111,7 @@ def run():
         for r, d in zip(rows, out):
             db.save_classification(r["id"], d)
         total += len(rows)
-        print(f"[score] {total} scored", flush=True)
+        print(f"[score] {total} scored (key {key_idx + 1}/{len(keys)})", flush=True)
         time.sleep(PAUSE_BETWEEN_BATCHES)
     return total
 

@@ -24,7 +24,7 @@ playwright install chromium
 export REDDIT_CLIENT_ID=...        # reddit.com/prefs/apps -> type "script"
 export REDDIT_CLIENT_SECRET=...
 export REDDIT_USER_AGENT="nichebot/0.1 by u/yourhandle"
-export GROQ_API_KEY=...            # free key: console.groq.com
+export GROQ_API_KEYS=key1,key2,... # free keys: console.groq.com (rotates on rate limit)
 ```
 
 ## Run
