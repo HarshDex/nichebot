@@ -50,7 +50,15 @@ def classify(cl, rows):
     )
     raw = "".join(b.text for b in msg.content if b.type == "text")
     raw = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # model added prose before/after the array despite instructions —
+        # fall back to the outermost [...] slice
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1 or end < start:
+            raise
+        return json.loads(raw[start:end + 1])
 
 
 def run():
