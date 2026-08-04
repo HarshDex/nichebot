@@ -11,7 +11,8 @@ import db
 
 MODEL = os.getenv("NICHEBOT_MODEL", "llama-3.3-70b-versatile")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-BATCH = 12
+BATCH = 8
+PAUSE_BETWEEN_BATCHES = 3  # seconds — stay under Groq's free-tier tokens/min limit
 
 SYSTEM = """You classify user complaints into micro-SaaS opportunity signals.
 For EACH numbered item, return one JSON object. Be strict and skeptical —
@@ -83,6 +84,15 @@ def run():
             break
         try:
             out = classify(cl, rows)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                wait = int(e.response.headers.get("retry-after", 20))
+                print(f"[score] rate limited, waiting {wait}s", flush=True)
+                time.sleep(wait)
+            else:
+                print(f"[score] batch failed: {e}", flush=True)
+                time.sleep(5)
+            continue
         except Exception as e:
             print(f"[score] batch failed: {e}", flush=True)
             time.sleep(5)
@@ -91,6 +101,7 @@ def run():
             db.save_classification(r["id"], d)
         total += len(rows)
         print(f"[score] {total} scored", flush=True)
+        time.sleep(PAUSE_BETWEEN_BATCHES)
     return total
 
 
