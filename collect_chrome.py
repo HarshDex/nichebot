@@ -72,6 +72,9 @@ def run(headless=True):
     return new
 
 
+MAX_LOAD_MORE_CLICKS = 8   # ~10 reviews per click; plenty to find 1-2 star ones
+
+
 def scrape_detail(page, url):
     page.goto(url, timeout=45000)
     page.wait_for_timeout(2000)
@@ -83,32 +86,40 @@ def scrape_detail(page, url):
     if users < MIN_USERS:
         return 0
 
-    # open reviews panel
-    for sel in ['text="See all reviews"', 'text="All reviews"', 'button:has-text("reviews")']:
-        try:
-            page.click(sel, timeout=3000)
-            page.wait_for_timeout(2500)
-            break
-        except Exception:
-            continue
+    # "See all reviews" is a real navigation link (not an in-page panel) —
+    # grab its href and go there directly instead of clicking (the visible
+    # span inside the link intercepts pointer events and click() times out).
+    href = page.eval_on_selector(
+        'a[aria-label="See all reviews"]', "el => el.href"
+    ) if page.query_selector('a[aria-label="See all reviews"]') else None
+    if not href:
+        return 0
+    page.goto(href, timeout=45000)
+    page.wait_for_timeout(2000)
 
-    # scroll the review list to load more
-    for _ in range(6):
-        page.mouse.wheel(0, 2500)
-        page.wait_for_timeout(900)
+    # reviews load 10 at a time behind a "Load more" button (mouse-wheel
+    # scrolling does NOT trigger more to load on this page)
+    for _ in range(MAX_LOAD_MORE_CLICKS):
+        try:
+            page.click('button:has-text("Load more")', timeout=2000)
+            page.wait_for_timeout(1200)
+        except Exception:
+            break
 
     added = 0
-    blocks = page.query_selector_all('[role="article"], .ba-Ea-Q, section')
+    blocks = page.query_selector_all("section.T7rvce")
     for b in blocks:
         try:
             txt = (b.inner_text() or "").strip()
         except Exception:
             continue
-        if not (60 < len(txt) < 4000):
+        if not (10 < len(txt) < 4000):
             continue
-        rm = re.search(r"(\d)\s*(?:out of 5|star)", txt, re.I)
+        star = b.query_selector('[aria-label*="out of 5 stars"]')
+        label = star.get_attribute("aria-label") if star else None
+        rm = re.match(r"([1-5]) out of 5 stars", label or "")
         rating = int(rm.group(1)) if rm else None
-        if rating is not None and rating > 2:
+        if rating is None or rating > 2:
             continue      # ONLY 1-2 star reviews — that's where the gap is
         if db.insert_signal(
             source="chrome_store", subsource=f"{name} ({users} users)",
