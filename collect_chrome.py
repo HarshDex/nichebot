@@ -17,6 +17,13 @@ SEED_QUERIES = [
     "linkedin", "youtube downloader", "pdf", "translate", "ad blocker",
     "shopify", "amazon seller", "real estate", "calendar", "meeting notes",
     "form filler", "password", "bookmark", "dark mode", "accessibility",
+    # vertical/professional niches (mirrors the Reddit vertical-subreddit list)
+    "dental practice", "legal billing", "restaurant pos", "salon booking",
+    "construction estimate", "hvac dispatch", "bookkeeping", "veterinary clinic",
+    "personal trainer", "photography client", "etsy seller", "property management",
+    "recruiting ats", "nonprofit donor", "teacher grading", "appointment scheduling",
+    "social media scheduler", "review management", "customer support chat",
+    "inventory management",
 ]
 
 BASE = "https://chromewebstore.google.com"
